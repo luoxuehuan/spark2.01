@@ -61,6 +61,9 @@ import org.apache.spark.ui.jobs.JobProgressListener
 import org.apache.spark.util._
 
 /**
+  * 注释学习spark2.0
+  */
+/**
  * Main entry point for Spark functionality. A SparkContext represents the connection to a Spark
  * cluster, and can be used to create RDDs, accumulators and broadcast variables on that cluster.
  *
