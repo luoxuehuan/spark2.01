@@ -53,23 +53,25 @@ private[spark] class BlockResult(
     val bytes: Long)
 
 /**
+  * blockmanager 运行在每个节点上。driver和Executor上。 提供 本地或者远程 快putting 和retriving 到不同的存储中（内存，硬盘，和堆外内存）的接口
+  *
  * Manager running on every node (driver and executors) which provides interfaces for putting and
  * retrieving blocks both locally and remotely into various stores (memory, disk, and off-heap).
- *
+ *注意： 在blockmanager使用前，必须进行初始化操作。 那什么是初始化呢？
  * Note that [[initialize()]] must be called before the BlockManager is usable.
  */
 private[spark] class BlockManager(
-    executorId: String,
+    executorId: String,//Executor的id
     rpcEnv: RpcEnv,
-    val master: BlockManagerMaster,
+    val master: BlockManagerMaster,//BlockManager的Master！主管。
     serializerManager: SerializerManager,
     val conf: SparkConf,
-    memoryManager: MemoryManager,
-    mapOutputTracker: MapOutputTracker,
-    shuffleManager: ShuffleManager,
+    memoryManager: MemoryManager,   //内存管理。
+    mapOutputTracker: MapOutputTracker, //map输出器
+    shuffleManager: ShuffleManager, //shuffle管理器。
     val blockTransferService: BlockTransferService,
-    securityManager: SecurityManager,
-    numUsableCores: Int)
+    securityManager: SecurityManager, //安全管理。
+    numUsableCores: Int)         //可用core数量
   extends BlockDataManager with BlockEvictionHandler with Logging {
 
   private[spark] val externalShuffleServiceEnabled =
@@ -152,6 +154,14 @@ private[spark] class BlockManager(
   private var blockReplicationPolicy: BlockReplicationPolicy = _
 
   /**
+    * 根据给的appid 初始化blockmanager。
+    *
+    * 如果blockmanager的appid不知道的情况下，就不会进行初始化。
+    *
+    * 这个方法初始化了blocktransferservice和shuffle客户端。 向blockmanagermaster注册。
+    * 开启 blockmanagerworker端。
+    * 注册一个shuffle 服务，如果配置过。
+    *
    * Initializes the BlockManager with the given appId. This is not performed in the constructor as
    * the appId may not be known at BlockManager instantiation time (in particular for the driver,
    * where it is only learned after registration with the TaskScheduler).
@@ -161,6 +171,12 @@ private[spark] class BlockManager(
    * service if configured.
    */
   def initialize(appId: String): Unit = {
+
+    /**
+      * blocktransfer服务初始化。
+      *
+      * shuffleclient初始化。
+      */
     blockTransferService.init(this)
     shuffleClient.init(appId)
 
@@ -195,9 +211,15 @@ private[spark] class BlockManager(
       registerWithExternalShuffleServer()
     }
 
+    /**
+      * 打印初始化blockmanager成功的信息！ 并给出blockMangerId！
+      */
     logInfo(s"Initialized BlockManager: $blockManagerId")
   }
 
+  /**
+    * 注册外部shuffleserver服务
+    */
   private def registerWithExternalShuffleServer() {
     logInfo("Registering executor with local external shuffle service.")
     val shuffleConfig = new ExecutorShuffleInfo(
@@ -238,8 +260,20 @@ private[spark] class BlockManager(
    */
   private def reportAllBlocks(): Unit = {
     logInfo(s"Reporting ${blockInfoManager.size} blocks to the master.")
+
+    /**
+      * （blockid,info） block的形式。 block里面的一个entry
+      * 遍历这个manager。
+      */
     for ((blockId, info) <- blockInfoManager.entries) {
       val status = getCurrentBlockStatus(blockId, info)
+
+      /**
+        * 如果要想master报告。
+        *
+        * true if the block was successfully recorded  如果是false ！ 后就是true
+        * 如果需要汇报，而且 没有被记录，那么就打印一个错误log。
+        */
       if (info.tellMaster && !tryToReportBlockStatus(blockId, status)) {
         logError(s"Failed to report $blockId to master; giving up.")
         return
