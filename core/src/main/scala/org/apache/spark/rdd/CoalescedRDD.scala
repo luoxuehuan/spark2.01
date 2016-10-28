@@ -62,6 +62,10 @@ private[spark] case class CoalescedRDDPartition(
   }
 }
 
+
+/*
+一个比它父RDD拥有更少分区数的rdd。（合并RDD）
+ */
 /**
  * Represents a coalesced RDD that has fewer partitions than its parent RDD
  * This class uses the PartitionCoalescer class to find a good partitioning of the parent RDD

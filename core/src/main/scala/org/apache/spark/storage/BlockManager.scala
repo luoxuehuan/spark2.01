@@ -283,14 +283,22 @@ private[spark] class BlockManager(
 
   /**
    * Re-register with the master and report all blocks to it. This will be called by the heart beat
-   * thread if our heartbeat to the block manager indicates that we were not registered.
+   * thread if our heartbeat to the block manager indicates《表明》 that we were not registered.
    *
-   * Note that this method must be called without any BlockInfo locks held.
+   * Note that this method must be called without any BlockInfo locks held.//如果没有blockinfo锁 套住，这个方法必须被调用。
    */
   def reregister(): Unit = {
     // TODO: We might need to rate limit re-registering.
     logInfo(s"BlockManager $blockManagerId re-registering with master")
+
+    /**
+      * 注册blockmanger。成员变量是blockmangerid和最大内存，还有跟随端。
+      */
     master.registerBlockManager(blockManagerId, maxMemory, slaveEndpoint)
+
+    /**
+      * 再次汇报blocks
+      */
     reportAllBlocks()
   }
 

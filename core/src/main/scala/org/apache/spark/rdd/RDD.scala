@@ -45,6 +45,30 @@ import org.apache.spark.util.collection.OpenHashMap
 import org.apache.spark.util.random.{BernoulliCellSampler, BernoulliSampler, PoissonSampler,
   SamplingUtils}
 
+
+
+/*
+  * *一个弹性的分布式数据集。
+  * 是spark的基本抽象。
+  *
+  * 这个class包含了对于RDD的基本操作。比如 map filter 和persist。
+  *
+  * PairRDDFunctions包含 对key-value pair的RDD的操作。比如 groupByKey 和 join
+  *
+  *
+  * 每个rdd都有5个主要特性。
+  * 1.一个Partition列表。
+  * 2.一个计算各个分区的函数。
+  * 3.一个在其他RDD上的依赖list
+  * 4.随意地，一个key-value rdd的分区。
+  * 5.随意地， 一个 计算hdfs file的分片 优先位置的的列表 。
+  *
+  *
+  *
+  *
+  *
+  *
+ */
 /**
  * A Resilient Distributed Dataset (RDD), the basic abstraction in Spark. Represents an immutable,
  * partitioned collection of elements that can be operated on in parallel. This class contains the
@@ -81,6 +105,10 @@ abstract class RDD[T: ClassTag](
   if (classOf[RDD[_]].isAssignableFrom(elementClassTag.runtimeClass)) {
     // This is a warning instead of an exception in order to avoid breaking user programs that
     // might have defined nested RDDs without running jobs with them.
+
+    /*
+     SPark不支持嵌套RDD
+     */
     logWarning("Spark does not support nested RDDs (see SPARK-5063)")
   }
 
@@ -145,6 +173,11 @@ abstract class RDD[T: ClassTag](
   /** The SparkContext that created this RDD. */
   def sparkContext: SparkContext = sc
 
+  /*
+  一个sc管理的rdd都有一个唯一的id
+
+  以及一个 昵称
+   */
   /** A unique ID for this RDD (within its SparkContext). */
   val id: Int = sc.newRddId()
 
@@ -157,6 +190,11 @@ abstract class RDD[T: ClassTag](
     this
   }
 
+
+  /*
+  标记rdd 缓存！
+  算完之后，才进行缓存的吗？？？
+   */
   /**
    * Mark this RDD for persisting using the specified level.
    *
@@ -255,6 +293,9 @@ abstract class RDD[T: ClassTag](
     }
   }
 
+  /*
+  获取这个rdd的分片数
+   */
   /**
    * Returns the number of partitions of this RDD.
    */
@@ -391,6 +432,27 @@ abstract class RDD[T: ClassTag](
    * Return a new RDD containing the distinct elements in this RDD.
    */
   def distinct(numPartitions: Int)(implicit ord: Ordering[T] = null): RDD[T] = withScope {
+    /*
+    去重的原理
+    4  5  7 4
+    map之后
+    (4 ,null)
+    (5 ,null)
+   ( 7, null)
+    (4 ,null)
+
+    reduceByKey之后
+    (4 ,(null,null))
+   ( 5, null)
+    (7 ,null)
+
+    再次map 取出tuple的_1 即 取出
+    4
+    5
+    7
+    去重成功！
+
+     */
     map(x => (x, null)).reduceByKey((x, y) => x, numPartitions).map(_._1)
   }
 
@@ -401,6 +463,12 @@ abstract class RDD[T: ClassTag](
     distinct(partitions.length)
   }
 
+
+  /*
+  返回一个拥有确切分区数的RDD
+  可以增加或降低并行度。
+  利用shuffle操作。来重建数据。
+   */
   /**
    * Return a new RDD that has exactly numPartitions partitions.
    *
@@ -414,6 +482,16 @@ abstract class RDD[T: ClassTag](
     coalesce(numPartitions, shuffle = true)
   }
 
+
+  /*
+  返回一个聚合到指定分区数的rdd
+  如果1000  到 100 窄依赖。不需要shuffle
+  如果是一次猛烈的coalesce 从1000到 1 那么 可能会 使用比你预期小的空间
+
+
+  如果是100 到1000 则可以开启shuffle。
+
+   */
   /**
    * Return a new RDD that is reduced into `numPartitions` partitions.
    *
@@ -439,6 +517,10 @@ abstract class RDD[T: ClassTag](
               (implicit ord: Ordering[T] = null)
       : RDD[T] = withScope {
     require(numPartitions > 0, s"Number of partitions ($numPartitions) must be positive.")
+
+    /*
+    如果开启shuffle。
+     */
     if (shuffle) {
       /** Distributes elements evenly across output partitions, starting from a random partition. */
       val distributePartition = (index: Int, items: Iterator[T]) => {
@@ -458,10 +540,17 @@ abstract class RDD[T: ClassTag](
         numPartitions,
         partitionCoalescer).values
     } else {
+      /*
+      如果没有开启shuffle。则利用CoalescedRDD的构造函数生成一个新的RDD。
+       */
       new CoalescedRDD(this, numPartitions, partitionCoalescer)
     }
   }
 
+
+  /*
+  取样
+   */
   /**
    * Return a sampled subset of this RDD.
    *
@@ -488,6 +577,10 @@ abstract class RDD[T: ClassTag](
     }
   }
 
+
+  /**
+    * 把rdd切割到array里面
+    */
   /**
    * Randomly splits this RDD with the provided weights.
    *
